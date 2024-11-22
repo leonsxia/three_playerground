@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - orbit controls</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="../main.css">
+		<style>
+			body {
+				background-color: #ccc;
+				color: #000;
+			}
+
+			a {
+				color: #f00;
+			}
+		</style>
+	</head>
+
+	<body>
+		<div id="info">
+			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - orbit controls
+		</div>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../../build/three.module.js",
+					"three/addons/": "../jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+			let activeCamera, perspectiveCamera, orthoCamera, controls, scene, renderer, group, maxillaMesh, teethMesh11, teethMesh21, axesHelper, gridHelper, raycaster;
+			let isMouseLeftDown, isMouseRightDown, mouse, isPicked;
+			const CAMERA_RAY_LAYER = 1;
+			const frustumSize = 30;
+			const initialCameraPosition = new THREE.Vector3(0, 0, 20);
+			let aspect = window.innerWidth / window.innerHeight;
+			const objectProject = new THREE.Vector3();
+
+			const xAxis = new THREE.Vector3(1, 0, 0);
+			const yAxis = new THREE.Vector3(0, 1, 0);
+			const zAxis = new THREE.Vector3(0, 0, 1);
+
+			init();
+			//render(); // remove when using animation loop
+
+			function init() {
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xcccccc );
+				// scene.fog = new THREE.FogExp2( 0xcccccc, 0.002 );
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setAnimationLoop( animate );
+				document.body.appendChild( renderer.domElement );
+
+				perspectiveCamera = new THREE.PerspectiveCamera( 60, aspect, 1, 1000 );
+				perspectiveCamera.position.copy(initialCameraPosition.clone());
+				orthoCamera = new THREE.OrthographicCamera(frustumSize * aspect / - 2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / - 2, 1, 1000);
+				orthoCamera.position.copy(initialCameraPosition.clone());
+
+				activeCamera = perspectiveCamera;
+
+				// controls
+
+				controls = new OrbitControls( activeCamera, renderer.domElement );
+				controls.listenToKeyEvents( window ); // optional
+
+				//controls.addEventListener( 'change', render ); // call this only in static scenes (i.e., if there is no animation loop)
+
+				controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+				controls.dampingFactor = 0.05;
+
+				controls.screenSpacePanning = false;
+
+				controls.minDistance = 10;
+				controls.maxDistance = 500;
+
+				controls.maxPolarAngle = Math.PI;
+
+				// controls.enabled = false;
+
+				// world
+
+				const maxillaGeometry = new THREE.BoxGeometry(20, 5, 5);
+				const teeth11Geometry = new THREE.ConeGeometry(3, 4, 4, 1);
+				const teeth21Geometry = new THREE.ConeGeometry(3, 4, 4, 1);
+				const material = new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true });
+
+				maxillaMesh = new THREE.Mesh(maxillaGeometry, material);
+				teethMesh11 = new THREE.Mesh(teeth11Geometry, material);
+				teethMesh21 = new THREE.Mesh(teeth21Geometry, material);
+				maxillaMesh.position.set(0, 2.5, 0);
+				teethMesh11.rotation.x = Math.PI;
+				teethMesh21.rotation.x = Math.PI;
+				teethMesh11.position.set(-5, -2, 0);
+				teethMesh21.position.set(5, -2, 0);
+				group = new THREE.Group();				
+				group.add(maxillaMesh, teethMesh11, teethMesh21);
+				group.children.forEach(m => m.layers.enable(CAMERA_RAY_LAYER));
+				scene.add(group);
+
+				axesHelper = new THREE.AxesHelper(30);
+				gridHelper = new THREE.GridHelper(50, 50);
+				gridHelper.rotation.x = Math.PI / 2;
+				gridHelper.material.depthTest = false;
+				scene.add(axesHelper, gridHelper);
+
+				mouse = new THREE.Vector2();
+				raycaster = new THREE.Raycaster();
+				raycaster.layers.set(CAMERA_RAY_LAYER);
+
+				// lights
+
+				const dirLight1 = new THREE.DirectionalLight( 0xffffff, 3 );
+				dirLight1.position.set( 1, 1, 1 );
+				scene.add( dirLight1 );
+
+				const dirLight2 = new THREE.DirectionalLight( 0x002288, 3 );
+				dirLight2.position.set( - 1, - 1, - 1 );
+				scene.add( dirLight2 );
+
+				const ambientLight = new THREE.AmbientLight( 0x555555 );
+				scene.add( ambientLight );
+
+				//
+
+				const canvas = renderer.domElement;
+
+				window.addEventListener( 'resize', onWindowResize );
+
+				canvas.addEventListener('mousedown', onMouseDown);
+
+				canvas.addEventListener('mouseup', onMouseUp);
+
+				canvas.addEventListener('mousemove', onMouseMove);
+
+				canvas.addEventListener('wheel', onMouseWheel);
+
+				window.addEventListener('keydown', onKeyDown);
+
+			}
+
+			function onWindowResize() {
+
+				aspect = window.innerWidth / window.innerHeight;
+				perspectiveCamera.aspect = aspect;
+				perspectiveCamera.updateProjectionMatrix();
+
+				orthoCamera.left = - frustumSize * aspect / 2;
+				orthoCamera.right = frustumSize * aspect / 2;
+				orthoCamera.top = frustumSize / 2;
+				orthoCamera.bottom = - frustumSize / 2;
+				orthoCamera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function onKeyDown(event) {
+
+				const resetControl = () => {
+
+					controls.reset();
+					controls.object = activeCamera;
+					showCamereInfo();
+							
+				};
+
+				switch (event.keyCode) {
+
+					case 79: /*O*/
+
+						// orthoCamera.zoom = 1;
+						activeCamera = orthoCamera;
+						resetControl();
+						break;
+
+					case 80: /*P*/
+
+						perspectiveCamera.position.copy(initialCameraPosition.clone());
+						activeCamera = perspectiveCamera;
+						resetControl();
+						break;
+
+				}
+
+			}
+
+			function showCamereInfo() {
+
+				if (activeCamera.isOrthographicCamera) {
+					console.log(`left:${orthoCamera.left}, right:${orthoCamera.right}, position:${[...orthoCamera.position]}, zoom:${orthoCamera.zoom}`);
+				} else {
+					console.log(`position:${[...perspectiveCamera.position]}, zoom:${perspectiveCamera.zoom}`);
+				}
+
+			}
+
+			function onMouseWheel(e) {
+				
+				showCamereInfo();
+
+			}
+
+			function onMouseMove(e) {
+
+				// console.log(`x:${e.movementX}, y:${e.movementY}`);
+				
+				mouse.x = ( e.clientX / window.innerWidth ) * 2 - 1;
+				mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
+
+				// console.log(`x:${e.clientX}, y:${e.clientY}`);
+				// console.log(`mouse.x:${mouse.x}, mouse.y:${mouse.y}`);
+
+				if (isMouseLeftDown) {
+
+					const XYspeed = 0.003;
+					const Zspeed = 0.001;
+
+					if (isPicked) {
+						
+						group.rotateOnWorldAxis(yAxis, e.movementX * XYspeed);
+						// group.rotateOnWorldAxis(zAxis, - e.movementX * Zspeed);
+						group.rotateOnWorldAxis(xAxis, e.movementY * XYspeed);
+
+					} else {
+						group.getWorldPosition(objectProject);
+						// console.log(`worldPosX:${objectProject.x}, worldPosY:${objectProject.y}`);
+						objectProject.project(activeCamera);
+						// console.log(`projPosX:${objectProject.x}, projPosY:${objectProject.y}`);
+						const radian = mouse.x >= objectProject.x ? - e.movementY * Zspeed : e.movementY * Zspeed;
+						group.rotateOnWorldAxis(zAxis, radian);
+
+					}
+
+				} else if (isMouseRightDown) {
+
+					const speed = 0.03;
+					const dir = new THREE.Vector3(e.movementX * speed, - e.movementY * speed, 0);
+					group.position.add(dir);
+
+				}
+
+			}
+
+			function onMouseDown(e) {
+				
+				if (e.button === 0) {
+
+					// if (controls.enableRotate) {
+
+					// 	controls.enableRotate = false;
+
+					// }
+
+					isMouseLeftDown = true;
+
+				} else if (e.button === 2) {
+
+					isMouseRightDown = true;
+
+				}
+
+				raycaster.setFromCamera(mouse, activeCamera);
+				const intersects = raycaster.intersectObjects([group]);
+
+				console.log(`picked:${intersects.length > 0 ? 'yes' : 'no'}`);
+
+				if (intersects.length > 0) {
+
+					isPicked = true;
+
+				} else {
+
+					isPicked = false;
+
+				}
+
+				controls.enabled = false;
+				
+			}
+
+			function onMouseUp(e) {
+
+				if (e.button === 0) {
+
+					// if (!controls.enableRotate) {
+
+					// 	controls.enableRotate = true;
+
+					// }
+
+					isMouseLeftDown = false;
+
+				} else if (e.button === 2) {
+
+					isMouseRightDown = false;
+
+				}
+
+				controls.enabled = true;
+				isPicked = false;
+
+			}
+
+			function animate() {
+
+				controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = true
+
+				render();
+
+			}
+
+			function render() {
+
+				renderer.render( scene, activeCamera );
+
+			}
+
+		</script>
+
+	</body>
+</html>

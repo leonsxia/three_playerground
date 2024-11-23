@@ -26,7 +26,8 @@
 			{
 				"imports": {
 					"three": "../../build/three.module.js",
-					"three/addons/": "../jsm/"
+					"three/addons/": "../jsm/",
+					"helpers/": "./helpers/"
 				}
 			}
 		</script>
@@ -37,13 +38,16 @@
 
 			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+			import { CustomGridHelper } from 'helpers/CustomGridHelper.js';
+
 			let activeCamera, perspectiveCamera, orthoCamera, controls, scene, renderer, group, maxillaMesh, teethMesh11, teethMesh21, axesHelper, gridHelper, raycaster;
 			let isMouseLeftDown, isMouseRightDown, mouse, isPicked;
 			const CAMERA_RAY_LAYER = 1;
 			const frustumSize = 30;
 			const initialCameraPosition = new THREE.Vector3(0, 0, 20);
-			let aspect = window.innerWidth / window.innerHeight;
 			const objectProject = new THREE.Vector3();
+			let aspect = window.innerWidth / window.innerHeight;
+			let showGrid = false;
 
 			const xAxis = new THREE.Vector3(1, 0, 0);
 			const yAxis = new THREE.Vector3(0, 1, 0);
@@ -110,11 +114,9 @@
 				group.children.forEach(m => m.layers.enable(CAMERA_RAY_LAYER));
 				scene.add(group);
 
-				axesHelper = new THREE.AxesHelper(30);
-				gridHelper = new THREE.GridHelper(50, 50);
-				gridHelper.rotation.x = Math.PI / 2;
+				gridHelper = new CustomGridHelper(1000, 1000, 10, 0xE52B50);
 				gridHelper.material.depthTest = false;
-				scene.add(axesHelper, gridHelper);
+				// scene.add(gridHelper);
 
 				mouse = new THREE.Vector2();
 				raycaster = new THREE.Raycaster();
@@ -147,6 +149,8 @@
 
 				canvas.addEventListener('wheel', onMouseWheel);
 
+				canvas.addEventListener('contextmenu', onContextMenu); // for mac chrome
+
 				window.addEventListener('keydown', onKeyDown);
 
 			}
@@ -167,6 +171,12 @@
 
 			}
 
+			function onContextMenu(e) {
+
+				e.preventDefault();
+
+			}
+
 			function onKeyDown(event) {
 
 				const resetControl = () => {
@@ -184,6 +194,8 @@
 						// orthoCamera.zoom = 1;
 						activeCamera = orthoCamera;
 						resetControl();
+						showGrid = true;
+						renderer.autoClear = false;
 						break;
 
 					case 80: /*P*/
@@ -191,6 +203,8 @@
 						perspectiveCamera.position.copy(initialCameraPosition.clone());
 						activeCamera = perspectiveCamera;
 						resetControl();
+						showGrid = false;
+						renderer.autoClear = true;
 						break;
 
 				}
@@ -209,7 +223,7 @@
 
 			function onMouseWheel(e) {
 				
-				showCamereInfo();
+				// showCamereInfo();
 
 			}
 
@@ -222,6 +236,7 @@
 
 				// console.log(`x:${e.clientX}, y:${e.clientY}`);
 				// console.log(`mouse.x:${mouse.x}, mouse.y:${mouse.y}`);
+				// console.log(`offsetX:${e.offsetX}, offsetY:${e.offsetY}`);
 
 				if (isMouseLeftDown) {
 
@@ -255,7 +270,7 @@
 			}
 
 			function onMouseDown(e) {
-				
+
 				if (e.button === 0) {
 
 					// if (controls.enableRotate) {
@@ -293,6 +308,8 @@
 
 			function onMouseUp(e) {
 
+				e.preventDefault();
+
 				if (e.button === 0) {
 
 					// if (!controls.enableRotate) {
@@ -325,6 +342,12 @@
 			function render() {
 
 				renderer.render( scene, activeCamera );
+
+				if (showGrid) {
+
+					renderer.render(gridHelper, activeCamera);
+
+				}
 
 			}
 

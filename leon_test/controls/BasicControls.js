@@ -56,6 +56,13 @@ class BasicControls {
         this._near = near;
         this._far = far;
 
+        this.controls.forEach(ctl => {
+
+            ctl.enablePan = false;
+            ctl.enableRotate = false;
+            
+        });
+
     }
 
     // camera is a ref

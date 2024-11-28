@@ -1,17 +1,14 @@
 import { Plane, Raycaster, Vector2, Vector3 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const ROT_SPEED_X = 0.03;
-const ROT_SPEED_Y = 0.05;
-const ROT_SPEED_Z = 0.02;
-const ROT_DOWN_SPEED_Z = 80;
+const ROT_SPEED_XY = 0.003;
+const ROT_SPEED_Z = 0.002;
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
 const PLANE_XY = new Plane(Z_AXIS);
 const NEAR = 55;
 const FAR = 265;
-const RADIUS = 50;
 const CAMERA_RAY_LAYER = 1;
 
 class BasicControls {
@@ -25,13 +22,10 @@ class BasicControls {
     object;
 
     _camera;
-    _modelPositionX;
 
     _initialCameraPostion;
     _mouse = new Vector2();
     _objectProject = new Vector3();
-    _objectLeftProject = new Vector3();
-    _objectRightProject = new Vector3();
     _preIntersected = new Vector3();
     _intersected = new Vector3();
     _isPicked;
@@ -44,11 +38,10 @@ class BasicControls {
 
     _near;
     _far;
-    _radius;
 
     constructor(options) {
 
-        const { perspectiveCamera, orthoCamera, domElement, object, near = NEAR, far = FAR, radius = RADIUS } = options;
+        const { perspectiveCamera, orthoCamera, domElement, object, near = NEAR, far = FAR } = options;
 
         this.perspectiveCamera = perspectiveCamera;
         this.orthoCamera = orthoCamera;
@@ -62,7 +55,6 @@ class BasicControls {
         this._initialCameraPostion = this.perspectiveCamera.position.clone();
         this._near = near;
         this._far = far;
-        this._radius = radius;
 
         this.controls.forEach(ctl => {
 
@@ -74,22 +66,11 @@ class BasicControls {
     }
 
     // camera is a ref
-    // modelPosition is a ref, for outside watch
-    init(camera, modelPosition = { value: new Vector3() }) {
+    init(camera) {
 
         this.bindUserControls();
         this.camera = camera;
         this.camera.value = this.activeCamera;
-
-        this._modelPosition = modelPosition;
-
-    }
-
-    reset() {
-
-        this.perspectiveCamera.position.copy(this._initialCameraPostion);
-        this.orthoCamera.zoom = 1;
-        this.orthoCamera.updateProjectionMatrix();
 
     }
 
@@ -109,6 +90,7 @@ class BasicControls {
 
         }
 
+        this.resetControl();
         this.camera.value = this.activeCamera;
 
     }
@@ -143,7 +125,7 @@ class BasicControls {
 
     }
 
-    resetControls() {
+    resetControl() {
 
         this.controls.forEach(ctl => ctl.reset());
     }
@@ -200,7 +182,7 @@ class BasicControls {
 
     onMouseWheel() {
         
-        this.showCameraInfo();  
+        // this.showCameraInfo();  
 
         const objPos = new Vector3();
         const dist = Math.abs(this.object.getWorldPosition(objPos).sub(this.perspectiveCamera.position).z);
@@ -210,7 +192,7 @@ class BasicControls {
         if (dist < this._near || dist > this._far) {
 
             this.disableControls();
-            this.resetControls();
+            this.resetControl();
 
         } else {
 
@@ -231,61 +213,26 @@ class BasicControls {
         // console.log(`offsetX:${event.offsetX}, y:${event.offsetY}`);
         // console.log(`mouseX:${this._mouse.x}, mouseY:${this._mouse.y}`);  
 
-        // const movementX = event.movementX;
-        // const movementY = event.movementY;
-
-        this.raycaster.setFromCamera(this._mouse, this.activeCamera);
-        this.raycaster.ray.intersectPlane(PLANE_XY, this._intersected);
-        // console.log(`intersected coords:`, this._intersected);
-        // console.log(`orthoCamZoom: ${this.orthoCamera.zoom}`);
-        const dir = this._intersected.clone().sub(this._preIntersected);
-        this._preIntersected.copy(this._intersected);
+        const movementX = event.movementX;
+        const movementY = event.movementY;
 
         if (this._isRotating) {
 
-            const objWorldPos = new Vector3();
-            this.object.getWorldPosition(objWorldPos);
-            this._objectProject.copy(objWorldPos);
-                // console.log(`worldPosX:${this._objectProject.x}, worldPosY:${this._objectProject.y}`);
-            this._objectLeftProject.set(this._objectProject.x - this._radius, this._objectProject.y, this._objectProject.z);
-            this._objectRightProject.set(this._objectProject.x + this._radius, this._objectProject.y, this._objectProject.z);
-            this._objectProject.project(this.activeCamera);
-            // console.log(`projPosX:${this._objectProject.x}, projPosY:${this._objectProject.y}`);
-            this._objectLeftProject.project(this.activeCamera);
-            this._objectRightProject.project(this.activeCamera);                                    
-
-            if (this._mouse.x >= this._objectLeftProject.x && this._mouse.x <= this._objectRightProject.x || this._isPicked) {
-
-                const deltaX = Math.abs(this._intersected.x - objWorldPos.x) / 10;
-                const deltaY = Math.abs(this._intersected.y - objWorldPos.y) / 40;
-                // console.log(`deltaX: ${deltaX}`);
-                let radianZ = this._mouse.x >= this._objectProject.x ? dir.y * ROT_SPEED_Z * deltaX : - dir.y * ROT_SPEED_Z * deltaX;
-                // let radianZ = this._mouse.x >= this._objectProject.x ? dir.y * ROT_SPEED_Z: - dir.y * ROT_SPEED_Z;
-
-                const dirX = dir.x * deltaY;
-                if (this._mouse.x < this._objectProject.x && this._mouse.y >= this._objectProject.y) {
-                    radianZ += - dirX / ROT_DOWN_SPEED_Z;
-                } else if (this._mouse.x >= this._objectProject.x && this._mouse.y >= this._objectProject.y) {
-                    radianZ += - dirX / ROT_DOWN_SPEED_Z;
-                } else if (this._mouse.x >= this._objectProject.x && this._mouse.y < this._objectProject.y) {
-                    radianZ += dirX / ROT_DOWN_SPEED_Z;
-                } else if (this._mouse.x < this._objectProject.x && this._mouse.y < this._objectProject.y) {
-                    radianZ += dirX / ROT_DOWN_SPEED_Z;
-                }
-
-                // const radianX = this._mouse.y >= this._objectProject.y ? - dir.x * ROT_SPEED_X * deltaY : dir.x * ROT_SPEED_X * deltaY;
+            if (this._isPicked) {
                 
-                // console.log(`radianX: ${radianX}`);
-                this.object.rotateOnWorldAxis(Y_AXIS, dir.x * ROT_SPEED_Y);
-                this.object.rotateOnWorldAxis(Z_AXIS, radianZ);
-                this.object.rotateOnWorldAxis(X_AXIS, - dir.y * ROT_SPEED_X);
-                // this.object.rotateOnAxis(X_AXIS, radianX);
-
+                this.object.rotateOnWorldAxis(Y_AXIS, movementX * ROT_SPEED_XY);
+                // this.object.rotateOnWorldAxis(Z_AXIS, - movementX * ROT_SPEED_Z);
+                this.object.rotateOnWorldAxis(X_AXIS, movementY * ROT_SPEED_XY);
 
             } else {
 
-                const radianZ = this._mouse.x >= this._objectProject.x ? dir.y * ROT_SPEED_Z : - dir.y * ROT_SPEED_Z;
-                this.object.rotateOnWorldAxis(Z_AXIS, radianZ);
+                this.object.getWorldPosition(this._objectProject);
+                // console.log(`worldPosX:${this._objectProject.x}, worldPosY:${this._objectProject.y}`);
+                this._objectProject.project(this.activeCamera);
+                // console.log(`projPosX:${this._objectProject.x}, projPosY:${this._objectProject.y}`);
+                
+                const radian = this._mouse.x >= this._objectProject.x ? - movementY * ROT_SPEED_Z : movementY * ROT_SPEED_Z;
+                this.object.rotateOnWorldAxis(Z_AXIS, radian);
 
             }
 
@@ -293,9 +240,14 @@ class BasicControls {
 
         if (this._isMoving) {
 
-            this.object.position.add(dir);
+            this.raycaster.setFromCamera(this._mouse, this.activeCamera);
+            this.raycaster.ray.intersectPlane(PLANE_XY, this._intersected);
+            // console.log(`intersected coords:`, this._intersected);
+            // console.log(`orthoCamZoom: ${this.orthoCamera.zoom}`);
 
-            this._modelPosition.value.copy(this.object.position);
+            const dir = this._intersected.clone().sub(this._preIntersected);
+            this._preIntersected.copy(this._intersected);
+            this.object.position.add(dir);
 
         }
 

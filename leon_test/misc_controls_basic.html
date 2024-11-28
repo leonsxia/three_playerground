@@ -95,11 +95,11 @@
 				controls = new BasicControls({
 					perspectiveCamera, orthoCamera, 
 					domElement: renderer.domElement, object: group,
-					near: 10, far: 100
+					near: 10, far: 100, radius: 12
 				});
 				controls.init(camera);
 
-				gridHelper = new CustomGridHelper(1000, 1000, 10, 0.5, 0xE52B50);
+				gridHelper = new CustomGridHelper(100, 100, 10, 1, 0xE52B50);
 				gridHelper.material.depthTest = false;
 				// scene.add(gridHelper);
 
